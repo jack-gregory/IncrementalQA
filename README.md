@@ -27,6 +27,7 @@ The remainder of this readme file provides instructions for how to setup and run
 
 # Extensions
 
-- [ ] Save scenarios by including upload & download fuctionality for df.scn_user() as a csv (see [here](https://mastering-shiny.org/action-transfer.html))
+- [ ] Check warning/error messages when app is running
+- [ ] Save scenarios by including upload & download functionality for df.scn_user() as a csv (see [here](https://mastering-shiny.org/action-transfer.html))
 - [ ] Other variables (e.g., baseload prices, generation, capacity, etc.)
 

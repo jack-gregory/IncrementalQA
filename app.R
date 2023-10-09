@@ -305,7 +305,8 @@ server <- function(input, output, session, odbc_name=opt$odbc) {
       # )
       
       ## Convert labels to factor
-      df.scn_user(dplyr::mutate(df.scn_user(), label = as.factor(label)))
+      scn_labels <- dplyr::pull(df.scn_user(), label)
+      df.scn_user(dplyr::mutate(df.scn_user(), label = factor(label, levels=scn_labels)))
       
       ## Perform DWH query
       df.data(
