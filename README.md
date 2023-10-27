@@ -31,3 +31,11 @@ The remainder of this readme file provides instructions for how to setup and run
 - [ ] Save scenarios by including upload & download functionality for df.scn_user() as a csv (see [here](https://mastering-shiny.org/action-transfer.html))
 - [ ] Other variables (e.g., baseload prices, generation, capacity, etc.)
 
+
+# Version Notes
+
+## v0.1 -- 2023-10-09
+
+- Initial version querying capture prices only.
+- Inclusion of start.bat file to run from terminal.
+
