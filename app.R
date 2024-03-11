@@ -27,7 +27,7 @@ pkgs <- c(
   "optparse",                                   # Command line arguments
   "shiny","shinythemes","shinybusy",            # Dashboard
   "fs",                                         # File system
-  "vroom",                                      # Data reading and writing
+  "vroom","assertr",                            # Data reading and writing
   "DBI","odbc",                                 # Data querying
   "tidyverse",                                  # Data wrangling
   "rhandsontable",                              # Dynamic tables
@@ -318,49 +318,67 @@ server <- function(input, output, session, odbc_name=opt$odbc) {
   
   ## Populate scenario table from saved file
   observeEvent(input$upload_button, {
-    ## Check extension
-    ext <- fs::path_ext(input$upload_button$name)
+    if (fs::path_ext(input$upload_button$name)!="csv") {
+      ## Prevent scenario table if incorrect file type
+      showNotification("Invalid file type; please upload a csv file.", duration=NULL, type="error")
+    } else {
+      ## Upload scenario table
+      df.scn <- vroom::vroom(input$upload_button$datapath, delim = ",", col_types="iccc")
+      
+      ## Dataframe assertions
+      scn_check <- df.scn |>
+        assertr::chain_start() %>%
+        assertr::verify(ncol(.)==4) |>
+        assertr::verify(assertr::has_only_names("id","project","scenario","label"), obligatory=TRUE) |>
+        assertr::verify(is.numeric(id)) |>
+        assertr::assert(is.character, -id) |>
+        assertr::assert(assertr::is_uniq, id, scenario, label) |>
+        assertr::chain_end(success_fun=assertr::success_logical, error_fun=assertr::error_logical)
+      
+      if (!scn_check) {
+        ## Prevent scenario table if incorrect dataframe format
+        showNotification("Invalid dataframe format; please upload a different csv file.", duration=NULL, type="error")
+      } else {
+        ## Create table using rhandsontable
+        output$table <- renderRHandsontable({
+          rhandsontable(
+              df.scn,
+              manualRowMove=TRUE,
+              stretchH="all"
+            ) |>
+            hot_col(col=seq(1,3), readOnly = TRUE) |>
+            hot_cols(columnSorting=TRUE) |>
+            hot_context_menu(allowRowEdit=FALSE, allowColEdit=FALSE, customOpts=list(items=c("remove_row")))
+        })
     
-    ## Create table using rhandsontable
-    output$table <- renderRHandsontable({
-      rhandsontable(
-          switch(ext,
-                 csv = vroom::vroom(input$upload_button$datapath, delim = ",", col_types="iccc"),
-                 validate("Invalid file; Please upload a .csv file")),
-          manualRowMove=TRUE,
-          stretchH="all"
-        ) |>
-        hot_col(col=seq(1,3), readOnly = TRUE) |>
-        hot_cols(columnSorting=TRUE) |>
-        hot_context_menu(allowRowEdit=FALSE, allowColEdit=FALSE, customOpts=list(items=c("remove_row")))
-    })
-
-    ## Display query button
-    output$download_button <- renderUI({
-      downloadButton("download",
-                     label="  Download",
-                     icon=icon("download"),
-                     style="background-color: gold"
-      )
-    })
-    
-    output$download <- downloadHandler(
-      filename = function() {
-        paste0("scenarios_", format(Sys.time(), '%Y%m%d'), ".csv")
-      },
-      content = function(file) {
-        vroom::vroom_write(df.scn_user(), file, delim=",")
+        ## Display query button
+        output$download_button <- renderUI({
+          downloadButton("download",
+                         label="  Download",
+                         icon=icon("download"),
+                         style="background-color: gold"
+          )
+        })
+        
+        output$download <- downloadHandler(
+          filename = function() {
+            paste0("scenarios_", format(Sys.time(), '%Y%m%d'), ".csv")
+          },
+          content = function(file) {
+            vroom::vroom_write(df.scn_user(), file, delim=",")
+          }
+        )
+        
+        ## Display query button
+        output$query_button <- renderUI({
+          actionButton("query_button",
+                       label="  Query",
+                       icon=icon("database"),
+                       style="background-color: gold"
+          )
+        })
       }
-    )
-    
-    ## Display query button
-    output$query_button <- renderUI({
-      actionButton("query_button",
-                   label="  Query",
-                   icon=icon("database"),
-                   style="background-color: gold"
-      )
-    })
+    }
   })
   
   ## Make scenario table user input reactive

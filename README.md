@@ -28,7 +28,6 @@ The remainder of this readme file provides instructions for how to setup and run
 # Extensions
 
 - [ ] Check warning/error messages when app is running
-- [ ] Check uploaded scenarios csv is in the correct format (see `assertr` package)
 - [ ] Other variables (e.g., baseload prices, generation, capacity, etc.)
 - [ ] Close connections and terminal when exiting (see Shiny functions `onStop()` and `onSessionEnded()` as well as [here](https://community.rstudio.com/t/closing-database-connection-when-closing-shiny-app/134910) and [here](https://stackoverflow.com/questions/65995120/how-to-close-the-connection-when-exiting-the-shiny-app))
 
