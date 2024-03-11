@@ -26,6 +26,8 @@
 pkgs <- c(
   "optparse",                                   # Command line arguments
   "shiny","shinythemes","shinybusy",            # Dashboard
+  "fs",                                         # File system
+  "vroom",                                      # Data reading and writing
   "DBI","odbc",                                 # Data querying
   "tidyverse",                                  # Data wrangling
   "rhandsontable",                              # Dynamic tables
@@ -51,18 +53,18 @@ theme_plot <- function() {
 
 ## ... command line arguments
 ## NB: See <https://www.r-bloggers.com/2015/09/passing-arguments-to-an-r-script-from-command-lines>
-option_list <- list(
-  make_option(c("-o", "--odbc"), type="character", default=NULL,
-              help="ODBC connection name (i.e., '--odbc Redshift').", metavar="character")
-)
-opt_parser <- OptionParser(option_list=option_list)
-opt <- parse_args(opt_parser)
-if (is.null(opt$odbc)){
-  print_help(opt_parser)
-  stop("An ODBC connection name must be supplied!!", call.=FALSE)
-}
+# option_list <- list(
+#   make_option(c("-o", "--odbc"), type="character", default=NULL,
+#               help="ODBC connection name (i.e., '--odbc Redshift').", metavar="character")
+# )
+# opt_parser <- OptionParser(option_list=option_list)
+# opt <- parse_args(opt_parser)
+# if (is.null(opt$odbc)){
+#   print_help(opt_parser)
+#   stop("An ODBC connection name must be supplied!!", call.=FALSE)
+# }
 
-# opt <- list(odbc="Redshift_2022")
+opt <- list(odbc="Redshift_2022")
 
 
 ## USER INTERFACE ---------------------------------------------------------------------------------
@@ -152,8 +154,24 @@ ui <- fluidPage(
               rHandsontableOutput("table"),
               # verbatimTextOutput("text_table"),
               br(),
+              fluidRow(
+                column(4,
+                  fileInput("upload_button",
+                            label=NULL,
+                            buttonLabel="Upload...",
+                            # icon=icon("upload"),
+                            # style="background-color: gold",
+                            accept=c(".csv")
+                  )
+                ),
+                column(1, offset=1,
+                  uiOutput("download_button")
+                )
+              ),
+              ## Query button
+              hr(),
               uiOutput("query_button")#,
-              # verbatimTextOutput("text_query"),
+              # verbatimTextOutput("text_query")
             )
           )
         )
@@ -243,7 +261,7 @@ server <- function(input, output, session, odbc_name=opt$odbc) {
     ")) |> dplyr::pull())
   })
   
-  ## Populate scenario table
+  ## Populate scenario table manually
   observeEvent(input$scenario_button, {
     ## Query DWH based on project and scenario user inputs
     df.scn <- DBI::dbGetQuery(con, paste0("
@@ -271,11 +289,76 @@ server <- function(input, output, session, odbc_name=opt$odbc) {
     })
     
     ## Display query button
+    output$download_button <- renderUI({
+      downloadButton("download",
+                     label="  Download",
+                     icon=icon("download"),
+                     style="background-color: gold"
+      )
+    })
+    
+    output$download <- downloadHandler(
+      filename = function() {
+        paste0("scenarios_", format(Sys.time(), '%Y%m%d'), ".csv")
+      },
+      content = function(file) {
+        vroom::vroom_write(df.scn_user(), file, delim=",")
+      }
+    )
+    
+    ## Display query button
     output$query_button <- renderUI({
       actionButton("query_button",
         label="  Query",
         icon=icon("database"),
         style="background-color: gold"
+      )
+    })
+  })
+  
+  ## Populate scenario table from saved file
+  observeEvent(input$upload_button, {
+    ## Check extension
+    ext <- fs::path_ext(input$upload_button$name)
+    
+    ## Create table using rhandsontable
+    output$table <- renderRHandsontable({
+      rhandsontable(
+          switch(ext,
+                 csv = vroom::vroom(input$upload_button$datapath, delim = ",", col_types="iccc"),
+                 validate("Invalid file; Please upload a .csv file")),
+          manualRowMove=TRUE,
+          stretchH="all"
+        ) |>
+        hot_col(col=seq(1,3), readOnly = TRUE) |>
+        hot_cols(columnSorting=TRUE) |>
+        hot_context_menu(allowRowEdit=FALSE, allowColEdit=FALSE, customOpts=list(items=c("remove_row")))
+    })
+
+    ## Display query button
+    output$download_button <- renderUI({
+      downloadButton("download",
+                     label="  Download",
+                     icon=icon("download"),
+                     style="background-color: gold"
+      )
+    })
+    
+    output$download <- downloadHandler(
+      filename = function() {
+        paste0("scenarios_", format(Sys.time(), '%Y%m%d'), ".csv")
+      },
+      content = function(file) {
+        vroom::vroom_write(df.scn_user(), file, delim=",")
+      }
+    )
+    
+    ## Display query button
+    output$query_button <- renderUI({
+      actionButton("query_button",
+                   label="  Query",
+                   icon=icon("database"),
+                   style="background-color: gold"
       )
     })
   })
@@ -286,7 +369,7 @@ server <- function(input, output, session, odbc_name=opt$odbc) {
     df.scn_user(rhandsontable::hot_to_r(input$table))
     # output$text_table <- renderPrint(dplyr::pull(df.scn_user(), label))
   })
-
+  
   ## Make query data reactive
   df.data <- reactiveVal()
   observeEvent(input$query_button, {

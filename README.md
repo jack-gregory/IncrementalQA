@@ -20,7 +20,7 @@ The remainder of this readme file provides instructions for how to setup and run
       - Variable value = "path\to\Rscript.exe" (e.g., `C:\Program Files\R\R-4.3.0\bin\x64\`)
    - Click "OK" three times.
 4. Setup an [ODBC connection to the DWH](https://auroraenergy.atlassian.net/wiki/spaces/AW/pages/3642130481/Data+Warehouse+Password+Update+Methods#ODBC).
-5. Clone the IncrementalQA repository = [https://github.com/jack-gregory/IncrementalQA.git](https://github.com/jack-gregory/IncrementalQA.git).
+5. Clone the IncrementalQA repository: [https://github.com/jack-gregory/IncrementalQA.git](https://github.com/jack-gregory/IncrementalQA.git).
 6. Run `start.bat` file within your cloned repository.
 7. If the bat file does not run, restart your machine for the PATH changes to take effect and try again.
 
@@ -28,11 +28,17 @@ The remainder of this readme file provides instructions for how to setup and run
 # Extensions
 
 - [ ] Check warning/error messages when app is running
-- [ ] Save scenarios by including upload & download functionality for df.scn_user() as a csv (see [here](https://mastering-shiny.org/action-transfer.html))
+- [ ] Check uploaded scenarios csv is in the correct format (see `assertr` package)
 - [ ] Other variables (e.g., baseload prices, generation, capacity, etc.)
+- [ ] Close connections and terminal when exiting (see Shiny functions `onStop()` and `onSessionEnded()` as well as [here](https://community.rstudio.com/t/closing-database-connection-when-closing-shiny-app/134910) and [here](https://stackoverflow.com/questions/65995120/how-to-close-the-connection-when-exiting-the-shiny-app))
 
 
 # Version Notes
+
+## v0.2 -- 2024-03-11
+
+- Inclusion of scenario save functionality.
+
 
 ## v0.1 -- 2023-10-09
 
