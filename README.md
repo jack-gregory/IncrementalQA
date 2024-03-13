@@ -2,7 +2,7 @@
 
 This repository contains an R Shiny web application for Aurora IncrementalQA.  The main output is a plotly heatmap which assists with the evaluation of run-by-run and year-by-year changes within a research project.
 
-At present, the app is a beta version and only plots capture prices.  However, in the future, it may be possible to add other outcome variables.  See [Extensions](#extensions) below.
+At present, the app is still in beta.  Please submit an issue if you have any comments or suggestions.
 
 
 # Instructions
@@ -35,7 +35,7 @@ The remainder of this readme file provides instructions for how to setup and run
 
 # Version Notes
 
-## v0.2 -- 2024-03-11
+## v0.2 -- 2024-03-13
 
 - Inclusion of scenario save functionality.
 - Inclusion of additional output variables (i.e., baseload prices, capacity, and net generation).

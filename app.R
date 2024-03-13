@@ -121,18 +121,18 @@ heatmap <- function(.data, .scn, .var, .iso3, .tech, .year) {
 
 ## ... command line arguments
 ## NB: See <https://www.r-bloggers.com/2015/09/passing-arguments-to-an-r-script-from-command-lines>
-# option_list <- list(
-#   make_option(c("-o", "--odbc"), type="character", default=NULL,
-#               help="ODBC connection name (i.e., '--odbc Redshift').", metavar="character")
-# )
-# opt_parser <- OptionParser(option_list=option_list)
-# opt <- parse_args(opt_parser)
-# if (is.null(opt$odbc)){
-#   print_help(opt_parser)
-#   stop("An ODBC connection name must be supplied!!", call.=FALSE)
-# }
+option_list <- list(
+  make_option(c("-o", "--odbc"), type="character", default=NULL,
+              help="ODBC connection name (i.e., '--odbc Redshift').", metavar="character")
+)
+opt_parser <- OptionParser(option_list=option_list)
+opt <- parse_args(opt_parser)
+if (is.null(opt$odbc)){
+  print_help(opt_parser)
+  stop("An ODBC connection name must be supplied!!", call.=FALSE)
+}
 
-opt <- list(odbc="Redshift_2022")
+# opt <- list(odbc="Redshift_2022")
 
 
 ## USER INTERFACE ---------------------------------------------------------------------------------
@@ -181,12 +181,16 @@ ui <- fluidPage(
           h6('An app producing a dynamic heatmap to compare incremental changes within a research project.'),
           ## Instructions
           h5(strong("Instructions")),
-          h6(HTML('1. Select all relevant EoS projects and click <em>Apply</em> to populate the scenarios dropdown.')),
-          h6(HTML('2. Select all relevant scenarios and click <em>Apply</em> to populate the table.')),
-          h6('3. Arrange the scenarios in the desired order by clicking and dragging rows.'),
-          h6('4. Label the scenarios with a descriptive abbreviation or accept the generic ones supplied.'),
+          h6('1. Import scenarios using one of the two methods below:'),
+          h6(HTML("&emsp; <b>From DWH ...</b>")),
+          h6(HTML('&emsp; a. Select all relevant EoS projects and click <em>Apply</em> to populate the scenarios dropdown.')),
+          h6(HTML('&emsp; b. Select all relevant scenarios and click <em>Apply</em> to populate the table.')),
+          h6(HTML("&emsp; <b>From file ...</b>")),
+          h6(HTML('&emsp; a. Click <em>Upload</em> to import saved scenarios table.')),
+          h6('2. Arrange the scenarios in the desired order by clicking and dragging rows.'),
+          h6('3. Label the scenarios with a descriptive abbreviation or accept the generic ones supplied.'),
+          h6('4. If desired, save scenarios table in a csv for future use.'),
           h6(HTML('5. Click <em>Query</em> to read the respective data from the DWH.')),
-          h6(HTML('6. Move to the <em>Heatmap</em> tab.')),
         ),
         mainPanel(
           fluidRow(
@@ -252,11 +256,12 @@ ui <- fluidPage(
         sidebarPanel(
           ## Instructions
           h5(strong("Instructions")),
-          h6('1. Once the query is available locally, select the desired region from the dropdown.'),
-          h6('2. Select the desired technology from the dropdown.'),
-          h6('3. Set the year range using the slider.'),
-          h6(HTML('4. Click <em>Plot</em> to generate the heatmap.')),
-          h6('5. Rinse and repeat.'),
+          h6('1. Once the query is available locally, select the desired variable from its dropdown.'),
+          h6('2. Select the desired region from its dropdown.'),
+          h6('3. If necessary, select the desired technology from its dropdown.'),
+          h6('4. Set the year range using its slider.'),
+          h6(HTML('5. Click <em>Plot</em> to generate the heatmap.')),
+          h6('6. Rinse and repeat.'),
           hr(),
           ## Variable select
           selectInput("var",
