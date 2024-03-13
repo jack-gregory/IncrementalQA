@@ -168,7 +168,7 @@ ui <- fluidPage(
   add_busy_bar(color="gold", height="4px"),
   
   ## Define UI layout
-  navbarPage("IncrementalQA", theme=shinythemes::shinytheme("yeti"),
+  navbarPage("IncrementalQA", id="IncQA", theme=shinythemes::shinytheme("yeti"),
     
     ## Scenarios page
     tabPanel("Scenarios",
@@ -584,6 +584,10 @@ server <- function(input, output, session, odbc_name=opt$odbc) {
                         max=year_max,
                         value=c(year_min, year_max)
       )
+      
+      ## Move to "Heatmap" tab
+      updateNavbarPage(session, inputId="IncQA",
+                       selected="Heatmap")
     }
   })
 
