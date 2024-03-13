@@ -27,8 +27,9 @@ The remainder of this readme file provides instructions for how to setup and run
 
 # Extensions
 
+- [ ] Simplify repetitive code.
+- [ ] Move functions and SQL queries to source files. 
 - [ ] Check warning/error messages when app is running
-- [ ] Other variables (e.g., baseload prices, generation, capacity, etc.)
 - [ ] Close connections and terminal when exiting (see Shiny functions `onStop()` and `onSessionEnded()` as well as [here](https://community.rstudio.com/t/closing-database-connection-when-closing-shiny-app/134910) and [here](https://stackoverflow.com/questions/65995120/how-to-close-the-connection-when-exiting-the-shiny-app))
 
 
@@ -37,6 +38,7 @@ The remainder of this readme file provides instructions for how to setup and run
 ## v0.2 -- 2024-03-11
 
 - Inclusion of scenario save functionality.
+- Inclusion of additional output variables (i.e., baseload prices, capacity, and net generation).
 
 
 ## v0.1 -- 2023-10-09

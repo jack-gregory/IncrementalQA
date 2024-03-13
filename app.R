@@ -51,6 +51,74 @@ theme_plot <- function() {
                  plot.caption = element_text(hjust=0))
 }
 
+heatmap <- function(.data, .scn, .var, .iso3, .tech, .year) {
+  
+  ## Assertions
+  stopifnot(
+    is.data.frame(.data),
+    is.data.frame(.scn),
+    .var %in% c("Baseload Price","Capture Price","Capacity","Net Generation"),
+    stringr::str_detect(.iso3, "^[A-Z]{3}$") && length(.iso3)==1,
+    is.character(.tech) && length(.tech)==1,
+    is.numeric(.year) && length(.year)==2
+  )
+  
+  ## Define inputs
+    ## ... variable
+  var_label <- tolower(.var)
+  var_sym <- gsub(" ", "", var_label)
+  var <- dplyr::sym(var_sym)
+  ## ... technology
+  if (.var=="Baseload Price") {
+    tech_filter <- dplyr::expr(TRUE)
+    tech_label <- ""
+  } else {
+    tech_filter <- dplyr::expr(technology==.tech)
+    tech_label <- .tech
+  }
+  ## ... unit symbol
+  if (.var=="Capacity") {
+    var_unit <- "GW"
+  } else if (.var=="Net Generation") {
+    var_unit <- "TWh"
+  } else {
+    var_unit <- "€"
+  }
+  
+  .data |>
+    dplyr::filter(region==.iso3) |>
+    dplyr::filter(!!tech_filter) |>
+    dplyr::filter(lubridate::year(date)>=.year[1] & lubridate::year(date)<=.year[2]) |>
+    dplyr::left_join(dplyr::select(.scn, id, label), by=c("scenarioid"="id")) |>
+    dplyr::relocate(label, .after=scenario) |>
+    dplyr::arrange(date, label) |>
+    dplyr::group_by(date) |>
+    dplyr::mutate(scale = max(!!var, na.rm=TRUE) - min(!!var, na.rm=TRUE),
+                  delta = !!var - dplyr::lag(!!var),
+                  ndelta = delta/scale,
+                  gap = dplyr::last(!!var) - dplyr::first(!!var),
+                  ngap = gap/scale,
+                  label = forcats::fct_recode(label, ALL=as.character(.scn$label[1])),
+                  ndelta = ifelse(label=="ALL", ngap, ndelta),
+                  text = ifelse(label=="ALL",
+                                paste0(lubridate::year(date), "\n", label, "\n",
+                                       formatC(round(gap/dplyr::first(!!var)*10^2, digits=2),
+                                               format="f", digits=2), "%"),
+                                paste0(lubridate::year(date), "\n", label, "\n",
+                                       formatC(round(delta, digits=2), format="f", digits=2), var_unit))) |>
+    ggplot2::ggplot(aes(x=label, y=date, fill=ndelta, text=text)) +
+    ggplot2::geom_hline(yintercept=as.POSIXct("2028-01-01"), linewidth=0.8) +
+    ggplot2::geom_tile(alpha=0.8) +
+    ggplot2::scale_fill_gradient2(limits=c(-1,1), low="#de1a24", mid="grey98", high="#3f8f29", na.value="grey80") +
+    ggplot2::labs(title=stringr::str_squish(paste(.iso3, tech_label, "normalized", var_label, "delta")),
+                  y="",
+                  x="",
+                  fill="Norm. Δ",
+                  caption="") +
+    theme_plot() +
+    ggplot2::theme(axis.text.x = element_text(angle=90, hjust=0, vjust=0.5))
+}
+
 ## ... command line arguments
 ## NB: See <https://www.r-bloggers.com/2015/09/passing-arguments-to-an-r-script-from-command-lines>
 # option_list <- list(
@@ -190,6 +258,12 @@ ui <- fluidPage(
           h6(HTML('4. Click <em>Plot</em> to generate the heatmap.')),
           h6('5. Rinse and repeat.'),
           hr(),
+          ## Variable select
+          selectInput("var",
+                      label=strong("Select variable"),
+                      choices=c("Baseload Price","Capture Price","Capacity","Net Generation"),
+                      selected=NULL
+          ),
           ## Region select
           selectInput("iso3",
             label=strong("Select region"),
@@ -388,8 +462,10 @@ server <- function(input, output, session, odbc_name=opt$odbc) {
     # output$text_table <- renderPrint(dplyr::pull(df.scn_user(), label))
   })
   
-  ## Make query data reactive
-  df.data <- reactiveVal()
+  ## Perform DWH queries
+  df.bp <- NULL
+  df.cp <- NULL
+  df.gen <- NULL
   observeEvent(input$query_button, {
     if (nrow(dplyr::distinct(df.scn_user(), id))!=nrow(df.scn_user())) {
       ## Prevent query if duplicate scenarios
@@ -409,9 +485,28 @@ server <- function(input, output, session, odbc_name=opt$odbc) {
       scn_labels <- dplyr::pull(df.scn_user(), label)
       df.scn_user(dplyr::mutate(df.scn_user(), label = factor(label, levels=scn_labels)))
       
-      ## Perform DWH query
-      df.data(
-        DBI::dbGetQuery(con, paste0("
+      ## Perform DWH queries
+      ## ... baseload prices
+      df.bp <<- DBI::dbGetQuery(con, paste0("
+          SELECT      dta.scenarioid,
+                      scn.project,
+                      scn.scenario,
+                      dta.regionid,
+                      reg.region,
+                      dta.timeid,
+                      tm.date,
+                      dta.baseloadprice
+          FROM        public.yearlyregion AS dta
+          INNER JOIN  ( SELECT  *
+                        FROM    public.scenarios 
+                        WHERE   id IN (", paste0("'", paste(dplyr::pull(df.scn_user(), id), collapse="', '"), "'"), ")
+                      ) AS scn ON dta.scenarioid=scn.id
+          LEFT JOIN   public.regions AS reg on dta.regionid=reg.id
+          LEFT JOIN   public.time AS tm ON dta.timeid=tm.id
+        ;"))
+      
+      ## ... capture prices
+      df.cp <<- DBI::dbGetQuery(con, paste0("
           SELECT      dta.scenarioid,
                       scn.project,
                       scn.scenario,
@@ -422,8 +517,7 @@ server <- function(input, output, session, odbc_name=opt$odbc) {
                       tech.technology,
                       dta.timeid,
                       tm.date,
-                      dta.capturepriceprecurtailment AS captureprice22,
-                      dta.capturedprice AS capturepricecurtailed22
+                      dta.capturedprice AS captureprice
           FROM        public.yearlyregiontechnologyfinance AS dta
           INNER JOIN  ( SELECT  *
                         FROM    public.scenarios 
@@ -433,7 +527,30 @@ server <- function(input, output, session, odbc_name=opt$odbc) {
           LEFT JOIN   public.technologies AS tech ON dta.technologyid=tech.id
           LEFT JOIN   public.time AS tm ON dta.timeid=tm.id
         ;"))
-      )
+      
+      ## ... capacity & net generation
+      df.gen <<- DBI::dbGetQuery(con, paste0("
+          SELECT      dta.scenarioid,
+                      scn.project,
+                      scn.scenario,
+                      dta.regionid,
+                      reg.region,
+                      dta.technologyid,
+                      tech.technologyfullname,
+                      tech.technology,
+                      dta.timeid,
+                      tm.date,
+                      dta.capacity,
+                      dta.netproductionintwh AS netgeneration
+          FROM        public.yearlyregiontechnologyoperations AS dta
+          INNER JOIN  ( SELECT  *
+                        FROM    public.scenarios 
+                        WHERE   id IN (", paste0("'", paste(dplyr::pull(df.scn_user(), id), collapse="', '"), "'"), ")
+                      ) AS scn ON dta.scenarioid=scn.id
+          LEFT JOIN   public.regions AS reg on dta.regionid=reg.id
+          LEFT JOIN   public.technologies AS tech ON dta.technologyid=tech.id
+          LEFT JOIN   public.time AS tm ON dta.timeid=tm.id
+        ;"))
       
       ## Release app
       # remove_modal_spinner()
@@ -441,27 +558,25 @@ server <- function(input, output, session, odbc_name=opt$odbc) {
       
       ## Populate region select
       updateSelectInput(session=session, inputId="iso3", selected=NULL,
-                        choices=df.data() |>
-                          dplyr::distinct(region) |>
-                          dplyr::arrange(region)
+                        choices=c(df.bp$region, df.cp$region, df.gen$region) |>
+                          unique() |>
+                          sort()
       )
       
       ## Populate technology select
       updateSelectInput(session=session, inputId="tech", selected=NULL,
-                        choices=df.data() |>
-                          dplyr::distinct(technology) |>
-                          dplyr::arrange(technology)
+                        choices=c(df.cp$technology, df.gen$technology) |>
+                          unique() |>
+                          sort()
       )
       
       ## Populate year double slider
-      year_min <- df.data() |>
-        dplyr::distinct(date) |>
-        dplyr::summarise(date = min(date)) |>
+      year_min <- c(df.bp$date, df.cp$date, df.gen$date) |>
+        min() |>
         as.numeric() |>
         lubridate::year()
-      year_max <- df.data() |>
-        dplyr::distinct(date) |>
-        dplyr::summarise(date = max(date)) |>
+      year_max <- c(df.bp$date, df.cp$date, df.gen$date) |>
+        max() |>
         as.numeric() |>
         lubridate::year()
       updateSliderInput(session=session, inputId="year",
@@ -473,51 +588,35 @@ server <- function(input, output, session, odbc_name=opt$odbc) {
   })
 
   ## Build heatmap
+  df.data <- reactiveVal()
   observeEvent(input$plot_button, {
     
     ## Add inputs list to prevent inadvertent heatmap changes
     l.choice <- list(
+      var=input$var,
       iso3=input$iso3,
       tech=input$tech,
       year=input$year
     )
     
+    ## Set reactive data
+    if (l.choice$var=="Baseload Price") {
+      df.data(df.bp)
+    } else if (l.choice$var=="Capture Price") {
+      df.data(df.cp)
+    } else {
+      df.data(df.gen)
+    }
+    
     ## Build plotly
     output$heatmap <- renderPlotly({
-      p.heatmap <- df.data() |>
-        dplyr::filter(region==l.choice$iso3) |>
-        dplyr::filter(technology==l.choice$tech) |>
-        dplyr::filter(lubridate::year(date)>=l.choice$year[1] & lubridate::year(date)<=l.choice$year[2]) |>
-        dplyr::left_join(dplyr::select(df.scn_user(), id, label), by=c("scenarioid"="id")) |>
-        dplyr::relocate(label, .after=scenario) |>
-        dplyr::arrange(date, label) |>
-        dplyr::group_by(date) |>
-        dplyr::mutate(scale = max(captureprice22, na.rm=TRUE) - min(captureprice22, na.rm=TRUE),
-                      delta = captureprice22 - dplyr::lag(captureprice22),
-                      ndelta = delta/scale,
-                      gap = dplyr::last(captureprice22) - dplyr::first(captureprice22),
-                      ngap = gap/scale,
-                      label = forcats::fct_recode(label, ALL=as.character(df.scn_user()$label[1])),
-                      ndelta = ifelse(label=="ALL", ngap, ndelta),
-                      text = ifelse(label=="ALL",
-                                    paste0(lubridate::year(date), "\n", label, "\n",
-                                           formatC(round(gap/dplyr::first(captureprice22)*10^2, digits=2),
-                                                   format="f", digits=2), "%"),
-                                    paste0(lubridate::year(date), "\n", label, "\n",
-                                           formatC(round(delta, digits=2), format="f", digits=2), "€"))) |>
-        ggplot2::ggplot(aes(x=label, y=date, fill=ndelta, text=text)) +
-        ggplot2::geom_hline(yintercept=as.POSIXct("2028-01-01"), linewidth=0.8) +
-        ggplot2::geom_tile(alpha=0.8) +
-        ggplot2::scale_fill_gradient2(limits=c(-1,1), low="#de1a24", mid="grey98", high="#3f8f29", na.value="grey80") +
-        ggplot2::labs(title=paste(l.choice$iso3, l.choice$tech, "capture price normalized delta by run and year"),
-                      y="",
-                      x="",
-                      fill="Norm. Δ",
-                      caption="") +
-        theme_plot() +
-        ggplot2::theme(axis.text.x = element_text(angle=90, hjust=0, vjust=0.5))
-
-      plotly::ggplotly(p.heatmap, tooltip="text")
+      plotly::ggplotly(heatmap(df.data(),
+                               .scn=df.scn_user(),
+                               .var=l.choice$var, 
+                               .iso3=l.choice$iso3, 
+                               .tech=l.choice$tech, 
+                               .year=l.choice$year), 
+                       tooltip="text")
     })
   })
 }
